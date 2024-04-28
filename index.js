@@ -69,7 +69,7 @@ const readTransactionsFromMempool = () => {
  * @returns {Buffer} The serialized transaction.
  */
 function serializeTransaction(transaction) {
-  console.log("transaction", transaction.vin[0].prevout, transaction);
+  //console.log("transaction", transaction.vin[0].prevout, transaction);
   let buffer = Buffer.alloc(0);
   const serializeInput = (input) => {
     const prevoutBuffer = Buffer.from(input.prevout.scriptpubkey, "hex");
@@ -129,7 +129,7 @@ function serializeTransaction(transaction) {
  */
 function validateTransaction(transaction) {
   const validateP2PKH = (input) => {
-    console.log("in validateP2PKH", input);
+    //console.log("in validateP2PKH", input);
     const scriptSig = Buffer.from(input.scriptsig, "hex");
     const scriptPubKey = Buffer.from(input.prevout.scriptpubkey, "hex");
     const tx = serializeTransaction(transaction);
@@ -145,7 +145,7 @@ function validateTransaction(transaction) {
 
     // Extracting public key
     const publicKey = scriptSig.slice(signatureEndIndex + 1, publicKeyEndIndex);
-    console.log("in validateP2PKH public key", publicKeyLength, publicKey);
+    //console.log("in validateP2PKH public key", publicKeyLength, publicKey);
     // Ensure publicKey is in the correct format (33 or 65 bytes)
     if (publicKey.length !== 33 && publicKey.length !== 65) {
       throw new Error("Invalid public key length");
@@ -184,7 +184,7 @@ function validateTransaction(transaction) {
   };
 
   const validateP2TR = (input) => {
-    console.log("validateP2TR", input);
+    //console.log("validateP2TR", input);
     const witness = input.witness;
     const scriptPubKey = Buffer.from(input.prevout.scriptpubkey, "hex");
     const tx = serializeTransaction(transaction);
@@ -384,7 +384,7 @@ const mineBlock = (blockTransactions) => {
     const merkleRoot = calculateMerkleRoot(blockTransactions);
     const blockData = `${nonce}${merkleRoot}`;
     const hash = crypto.createHash("sha256").update(blockData).digest("hex");
-    console.log("mining baby", hash, DIFFICULTY_TARGET);
+    // console.log("mining baby", hash, DIFFICULTY_TARGET);
     if (hash < DIFFICULTY_TARGET) {
       blockHeader = `${nonce}${merkleRoot}`;
       break;
