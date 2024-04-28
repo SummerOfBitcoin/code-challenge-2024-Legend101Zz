@@ -482,7 +482,7 @@ const mineBlock = (blockTransactions) => {
 
     // Calculate the hash of the block header
     const hash = crypto.createHash("sha256").update(blockData).digest("hex");
-    console.log("mining baby", hash);
+    // console.log("mining baby", hash);
     if (hash < DIFFICULTY_TARGET) {
       // If the hash meets the difficulty target, break the loop
       blockHeader = blockData;
@@ -557,7 +557,7 @@ const main = () => {
     "\n"
   )}`;
   fs.writeFileSync(OUTPUT_FILE, output);
-  console.log("length", transactions.length, validTransactions.length);
+  // console.log("length", transactions.length, validTransactions.length);
 };
 
 main();
