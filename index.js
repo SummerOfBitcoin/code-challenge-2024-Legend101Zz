@@ -467,12 +467,11 @@ const mineBlock = (blockTransactions) => {
   let nonce = 0;
   let blockHeader = "";
   let interval = 1000; // Adjust this interval based on performance
-
+  const merkleRoot = calculateMerkleRoot(blockTransactions);
   while (true) {
-    const merkleRoot = calculateMerkleRoot(blockTransactions);
     const blockData = `${nonce}${merkleRoot}`;
     const hash = crypto.createHash("sha256").update(blockData).digest("hex");
-console.log('mining baby',)
+    console.log("mining baby", hash);
     if (hash < DIFFICULTY_TARGET) {
       blockHeader = `${nonce}${merkleRoot}`;
       break;
