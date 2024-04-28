@@ -540,7 +540,7 @@ const calculateMerkleRoot = (transactions) => {
       const hash2 = i + 1 < hashes.length ? hashes[i + 1] : hash1;
       const combinedHash = crypto
         .createHash("sha256")
-        .update(Buffer.concat([hash1, hash2]))
+        .update(Buffer.concat([hash1, Buffer.alloc(32), hash2]))
         .digest();
       newHashes.push(combinedHash);
     }
