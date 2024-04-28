@@ -1,45 +1,3 @@
-// const fs = require("fs");
-// const { constructBlock, mineBlock } = require("./blockFunctions"); // Remove the import of validateTransaction
-// const { validateTransaction } = require("./validateTransaction"); // Add the import of validateTransaction
-
-// // Step 1: Read Transactions from Mempool
-// const mempoolDir = "./mempool";
-// const transactions = fs
-//   .readdirSync(mempoolDir)
-//   .filter((file) => file.endsWith(".json"))
-//   .map((file) => JSON.parse(fs.readFileSync(`${mempoolDir}/${file}`, "utf8")));
-
-// console.log(transactions);
-// // Step 2: Validate Transactions and Filter Valid Ones
-// const validTransactions = [];
-// transactions.forEach((transaction, index) => {
-//   try {
-//     if (!transaction) {
-//       // console.error(`Invalid transaction at index ${index}: undefined`);
-//     }
-//     const isValid = validateTransaction(transaction, [], []); // Pass empty arrays for mempool and blockTransactions
-//     if (isValid) {
-//       validTransactions.push(transaction);
-//     } else {
-//       console.error(
-//         `Invalid transaction at index ${index}: ${transaction.txid}`
-//       );
-//     }
-//   } catch (error) {
-//     console.error(
-//       `Error validating transaction at index ${index}: ${error.message}`
-//     );
-//   }
-// });
-
-// // // Step 3: Construct the Block
-// // const block = constructBlock(validTransactions);
-
-// // // Step 4: Mine the Block
-// // const minedBlock = mineBlock(block);
-
-// // Step 5: Output the Block to output.txt
-// fs.writeFileSync("output.txt", JSON.stringify(validTransactions));
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -69,7 +27,7 @@ const readTransactionsFromMempool = () => {
  * @returns {Buffer} The serialized transaction.
  */
 function serializeTransaction(transaction) {
-  //console.log("transaction", transaction.vin[0].prevout, transaction);
+  // console.log("transaction", transaction.vin[0].prevout, transaction);
   let buffer = Buffer.alloc(0);
   const serializeInput = (input) => {
     const prevoutBuffer = Buffer.from(input.prevout.scriptpubkey, "hex");
@@ -129,7 +87,7 @@ function serializeTransaction(transaction) {
  */
 function validateTransaction(transaction) {
   const validateP2PKH = (input) => {
-    //console.log("in validateP2PKH", input);
+    // console.log("in validateP2PKH", input);
     const scriptSig = Buffer.from(input.scriptsig, "hex");
     const scriptPubKey = Buffer.from(input.prevout.scriptpubkey, "hex");
     const tx = serializeTransaction(transaction);
@@ -145,7 +103,7 @@ function validateTransaction(transaction) {
 
     // Extracting public key
     const publicKey = scriptSig.slice(signatureEndIndex + 1, publicKeyEndIndex);
-    //console.log("in validateP2PKH public key", publicKeyLength, publicKey);
+    // console.log("in validateP2PKH public key", publicKeyLength, publicKey);
     // Ensure publicKey is in the correct format (33 or 65 bytes)
     if (publicKey.length !== 33 && publicKey.length !== 65) {
       throw new Error("Invalid public key length");
@@ -183,8 +141,55 @@ function validateTransaction(transaction) {
     return secp256k1.ecdsaVerify(signature, hash, publicKey);
   };
 
+  const validateP2SH = (input) => {
+    const redeemScript = Buffer.from(
+      input.inner_redeemscript_asm.split(" ").slice(1).join(""),
+      "hex"
+    );
+    const scriptSig = Buffer.from(
+      input.scriptsig_asm.split(" ").slice(1).join(""),
+      "hex"
+    );
+    const tx = serializeTransaction(transaction);
+    const hash = crypto.createHash("sha256").update(tx).digest();
+
+    // Execute the redeem script
+    const redeemScriptResult = executeScript(redeemScript, scriptSig, hash);
+
+    // Validate the redeem script result
+    if (!redeemScriptResult) {
+      console.error("P2SH validation failed: invalid redeem script execution");
+      return false;
+    }
+
+    return true;
+  };
+
+  const validateV0P2WSH = (input) => {
+    const witness = input.witness.map((item) => Buffer.from(item, "hex"));
+    const witnessScript = Buffer.from(
+      input.prevout.scriptpubkey_asm.split(" ").slice(1).join(""),
+      "hex"
+    );
+    const tx = serializeTransaction(transaction);
+    const hash = crypto.createHash("sha256").update(tx).digest();
+
+    // Execute the witness script
+    const witnessScriptResult = executeScript(witnessScript, witness, hash);
+
+    // Validate the witness script result
+    if (!witnessScriptResult) {
+      console.error(
+        "v0 P2WSH validation failed: invalid witness script execution"
+      );
+      return false;
+    }
+
+    return true;
+  };
+
   const validateP2TR = (input) => {
-    //console.log("validateP2TR", input);
+    //console.log("in validateP2TR", input);
     const witness = input.witness;
     const scriptPubKey = Buffer.from(input.prevout.scriptpubkey, "hex");
     const tx = serializeTransaction(transaction);
@@ -261,43 +266,125 @@ function validateTransaction(transaction) {
     return true;
   };
 
+  const executeScript = (script, ...stackItems) => {
+    const stack = [];
+    let scriptIndex = 0;
+
+    const opcodes = {
+      OP_0: 0x00,
+      OP_PUSHDATA1: 0x4c,
+      OP_PUSHDATA2: 0x4d,
+      OP_PUSHDATA4: 0x4e,
+      OP_1NEGATE: 0x4f,
+      OP_1: 0x51,
+      OP_16: 0x60,
+      OP_CHECKSIG: 0xac,
+      OP_CHECKMULTISIG: 0xae,
+      // Add more opcodes as needed
+    };
+
+    const popStackItem = () => {
+      if (stack.length === 0) return undefined;
+      return stack.pop();
+    };
+
+    const pushStackItem = (item) => {
+      stack.push(item);
+    };
+
+    while (scriptIndex < script.length) {
+      const opcode = script[scriptIndex];
+
+      if (opcode in opcodes) {
+        switch (opcode) {
+          case opcodes.OP_0:
+            pushStackItem(Buffer.alloc(0));
+            break;
+          case opcodes.OP_PUSHDATA1:
+            const dataLength = script[scriptIndex + 1];
+            const data = script.slice(
+              scriptIndex + 2,
+              scriptIndex + 2 + dataLength
+            );
+            pushStackItem(data);
+            scriptIndex += dataLength;
+            break;
+          case opcodes.OP_PUSHDATA2:
+            // Handle OP_PUSHDATA2
+            break;
+          case opcodes.OP_PUSHDATA4:
+            // Handle OP_PUSHDATA4
+            break;
+          case opcodes.OP_1NEGATE:
+          case opcodes.OP_1:
+          case opcodes.OP_16:
+            const num = opcode - 0x50;
+            pushStackItem(Buffer.from([num]));
+            break;
+          case opcodes.OP_CHECKSIG:
+            // Handle OP_CHECKSIG
+            break;
+          case opcodes.OP_CHECKMULTISIG:
+            // Handle OP_CHECKMULTISIG
+            break;
+          // Add cases for other opcodes
+        }
+      } else {
+        // Handle non-opcode bytes
+      }
+
+      scriptIndex++;
+    }
+
+    // Return true if script execution is successful, false otherwise
+    return true;
+  };
+
   for (const input of transaction.vin) {
     const scriptPubKeyType = input.prevout.scriptpubkey_type;
-    if (scriptPubKeyType === "p2pkh") {
-      if (input.scriptsig) {
-        if (!validateP2PKH(input)) {
+    switch (scriptPubKeyType) {
+      case "p2pkh":
+        if (input.scriptsig) {
+          if (!validateP2PKH(input)) {
+            return false;
+          }
+        } else {
+          if (!validateScriptSig(input)) {
+            return false;
+          }
+        }
+        break;
+      case "v0_p2wpkh":
+        if (input.witness && input.witness.length > 0) {
+          if (!validateP2WPKH(input)) {
+            return false;
+          }
+        } else {
+          if (!validateScriptSig(input)) {
+            return false;
+          }
+        }
+        break;
+      case "v1_p2tr":
+        if (!validateP2TR(input)) {
           return false;
         }
-      } else {
-        if (!validateScriptSig(input)) {
+        break;
+      case "p2sh":
+        if (!validateP2SH(input)) {
           return false;
         }
-      }
-      if (!validateScriptPubKey(input)) {
-        return false;
-      }
-    } else if (scriptPubKeyType === "v0_p2wpkh") {
-      if (input.witness && input.witness.length > 0) {
-        if (!validateP2WPKH(input)) {
+        break;
+      case "v0_p2wsh":
+        if (!validateV0P2WSH(input)) {
           return false;
         }
-      } else {
-        if (!validateScriptSig(input)) {
-          return false;
-        }
-      }
-      if (!validateScriptPubKey(input)) {
+        break;
+      default:
+        console.warn(`Unsupported script type: ${scriptPubKeyType}`);
         return false;
-      }
-    } else if (scriptPubKeyType === "v1_p2tr") {
-      if (!validateP2TR(input)) {
-        return false;
-      }
-      if (!validateScriptPubKey(input)) {
-        return false;
-      }
-    } else {
-      console.warn(`Unsupported script type: ${scriptPubKeyType}`);
+    }
+    if (!validateScriptPubKey(input)) {
       return false;
     }
   }
@@ -379,18 +466,34 @@ const constructBlock = (validTransactions) => {
 const mineBlock = (blockTransactions) => {
   let nonce = 0;
   let blockHeader = "";
+  let interval = 1000; // Adjust this interval based on performance
 
   while (true) {
     const merkleRoot = calculateMerkleRoot(blockTransactions);
     const blockData = `${nonce}${merkleRoot}`;
     const hash = crypto.createHash("sha256").update(blockData).digest("hex");
-    // console.log("mining baby", hash, DIFFICULTY_TARGET);
+console.log('mining baby',)
     if (hash < DIFFICULTY_TARGET) {
       blockHeader = `${nonce}${merkleRoot}`;
       break;
     }
 
-    nonce++;
+    nonce += interval;
+
+    // Check if we've overshot the target
+    const nextBlockData = `${nonce}${merkleRoot}`;
+    const nextHash = crypto
+      .createHash("sha256")
+      .update(nextBlockData)
+      .digest("hex");
+
+    if (nextHash > DIFFICULTY_TARGET) {
+      // If we overshot, reduce the interval
+      interval = Math.floor(interval / 2);
+      if (interval === 0) {
+        interval = 1;
+      }
+    }
   }
 
   return { blockHeader, blockTransactions };
@@ -402,7 +505,7 @@ const calculateMerkleRoot = (transactions) => {
   }
 
   let hashes = transactions.map((tx) =>
-    crypto.createHash("sha256").update(serializeTransaction(tx)).digest("hex")
+    crypto.createHash("sha256").update(serializeTransaction(tx)).digest()
   );
 
   while (hashes.length > 1) {
@@ -412,17 +515,14 @@ const calculateMerkleRoot = (transactions) => {
       const hash2 = i + 1 < hashes.length ? hashes[i + 1] : hash1;
       const combinedHash = crypto
         .createHash("sha256")
-        .update(
-          Buffer.concat([Buffer.from(hash1, "hex"), Buffer.from(hash2, "hex")])
-        )
-        .digest("hex");
-
+        .update(Buffer.concat([hash1, hash2]))
+        .digest();
       newHashes.push(combinedHash);
     }
     hashes = newHashes;
   }
 
-  return hashes[0];
+  return Buffer.from(hashes[0]).toString("hex");
 };
 
 // Main function
@@ -445,6 +545,7 @@ const main = () => {
     "\n"
   )}`;
   fs.writeFileSync(OUTPUT_FILE, output);
+  console.log("length", transactions.length, validTransactions.length);
 };
 
 main();
