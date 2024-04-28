@@ -473,12 +473,19 @@ const mineBlock = (blockTransactions) => {
     .createHash("sha256")
     .update(Math.random().toString())
     .digest("hex");
+
   while (true) {
     const timestamp = Math.floor(Date.now() / 1000);
     const version = 4;
 
     // Construct the block header
-    const blockData = `${version}${previousBlockHash}${merkleRoot}${timestamp}${DIFFICULTY_TARGET}${nonce}`;
+    const blockData = `${version
+      .toString(16)
+      .padStart(8, "0")}${previousBlockHash}${merkleRoot}${timestamp
+      .toString(16)
+      .padStart(8, "0")}${DIFFICULTY_TARGET}${nonce
+      .toString(16)
+      .padStart(8, "0")}`;
 
     // Calculate the hash of the block header
     const hash = crypto.createHash("sha256").update(blockData).digest("hex");
@@ -493,7 +500,13 @@ const mineBlock = (blockTransactions) => {
     nonce += interval;
 
     // Check if we've overshot the target
-    const nextBlockData = `${version}${previousBlockHash}${merkleRoot}${timestamp}${DIFFICULTY_TARGET}}${nonce}`;
+    const nextBlockData = `${version
+      .toString(16)
+      .padStart(8, "0")}${previousBlockHash}${merkleRoot}${timestamp
+      .toString(16)
+      .padStart(8, "0")}${DIFFICULTY_TARGET}${nonce
+      .toString(16)
+      .padStart(8, "0")}`;
     const nextHash = crypto
       .createHash("sha256")
       .update(nextBlockData)
@@ -557,7 +570,12 @@ const main = () => {
     "\n"
   )}`;
   fs.writeFileSync(OUTPUT_FILE, output);
-  // console.log("length", transactions.length, validTransactions.length);
+  console.log(
+    "length",
+    blockHeader,
+    transactions.length,
+    validTransactions.length
+  );
 };
 
 main();
