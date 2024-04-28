@@ -468,19 +468,32 @@ const mineBlock = (blockTransactions) => {
   let blockHeader = "";
   let interval = 1000; // Adjust this interval based on performance
   const merkleRoot = calculateMerkleRoot(blockTransactions);
+  // Generate a random previous block hash
+  const previousBlockHash = crypto
+    .createHash("sha256")
+    .update(Math.random().toString())
+    .digest("hex");
   while (true) {
-    const blockData = `${nonce}${merkleRoot}`;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const version = 4;
+
+    // Construct the block header
+    const blockData = `${version}${previousBlockHash}${merkleRoot}${timestamp}${DIFFICULTY_TARGET}${nonce}`;
+
+    // Calculate the hash of the block header
     const hash = crypto.createHash("sha256").update(blockData).digest("hex");
     console.log("mining baby", hash);
     if (hash < DIFFICULTY_TARGET) {
-      blockHeader = `${nonce}${merkleRoot}`;
+      // If the hash meets the difficulty target, break the loop
+      blockHeader = blockData;
       break;
     }
 
+    // Increment nonce and continue mining
     nonce += interval;
 
     // Check if we've overshot the target
-    const nextBlockData = `${nonce}${merkleRoot}`;
+    const nextBlockData = `${version}${previousBlockHash}${merkleRoot}${timestamp}${DIFFICULTY_TARGET}}${nonce}`;
     const nextHash = crypto
       .createHash("sha256")
       .update(nextBlockData)
