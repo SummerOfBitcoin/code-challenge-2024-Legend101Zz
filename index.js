@@ -492,8 +492,8 @@ const mineBlock = (blockTransactions) => {
     // Calculate the hash of the block header
     const hash = crypto.createHash("sha256").update(blockData).digest("hex");
     // console.log("mining baby", hash);
-    console.log("mining baby", hash);
-    console.log("mining header", blockData);
+    // console.log("mining baby", hash);
+    // console.log("mining header", blockData);
     if (hash < DIFFICULTY_TARGET) {
       // If the hash meets the difficulty target, break the loop
       blockHeader = blockData;
