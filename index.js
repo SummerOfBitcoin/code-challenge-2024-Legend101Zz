@@ -468,35 +468,49 @@ const mineBlock = (blockTransactions) => {
   let blockHeader = "";
   let interval = 1000; // Adjust this interval based on performance
   const merkleRoot = calculateMerkleRoot(blockTransactions);
-  // Generate a random previous block hash
-  // const previousBlockHash = crypto
-  //   .createHash("sha256")
-  //   .update(Math.random().toString())
-  //   .digest("hex");
-
   const previousBlockHash = "12bd1f661f00ffff00003ea4";
+  const version = 4;
+
+  // Construct the block header template
+  const blockHeaderTemplate = Buffer.concat([
+    Buffer.from(version.toString(16).padStart(8, "0"), "hex"),
+    Buffer.from(previousBlockHash, "hex"),
+    Buffer.from(merkleRoot, "hex"),
+    Buffer.alloc(8), // Placeholder for timestamp
+    Buffer.from(DIFFICULTY_TARGET, "hex"),
+    Buffer.alloc(8), // Placeholder for nonce
+  ]);
 
   while (true) {
     const timestamp = Math.floor(Date.now() / 1000);
-    const version = 4;
 
-    // Construct the block header
-    const blockData = `${version
-      .toString(16)
-      .padStart(8, "0")}${previousBlockHash}${merkleRoot}${timestamp
-      .toString(16)
-      .padStart(8, "0")}${DIFFICULTY_TARGET}${nonce
-      .toString(16)
-      .padStart(8, "0")}`;
+    // Update the timestamp in the block header template
+    blockHeaderTemplate.writeUInt32LE(timestamp, 36);
 
-    // Calculate the hash of the block header
-    const hash = crypto.createHash("sha256").update(blockData).digest("hex");
-    // console.log("mining baby", hash);
-    // console.log("mining baby", hash);
-    // console.log("mining header", blockData);
+    // Update the nonce in the block header template
+    blockHeaderTemplate.writeUInt32LE(nonce, 44);
+
+    // Calculate the double SHA-256 hash of the block header
+    const hash = crypto
+      .createHash("sha256")
+      .update(crypto.createHash("sha256").update(blockHeaderTemplate).digest())
+      .digest("hex");
+
+    console.log("mining baby", blockHeaderTemplate.toString("hex"));
+    console.log(
+      "mining header",
+      `${version
+        .toString(16)
+        .padStart(8, "0")}//${previousBlockHash}//${merkleRoot}//${timestamp
+        .toString(16)
+        .padStart(8, "0")}//${DIFFICULTY_TARGET}//${nonce
+        .toString(16)
+        .padStart(8, "0")}`
+    );
+
     if (hash < DIFFICULTY_TARGET) {
       // If the hash meets the difficulty target, break the loop
-      blockHeader = blockData;
+      blockHeader = blockHeaderTemplate.toString("hex");
       break;
     }
 
@@ -504,16 +518,10 @@ const mineBlock = (blockTransactions) => {
     nonce += interval;
 
     // Check if we've overshot the target
-    const nextBlockData = `${version
-      .toString(16)
-      .padStart(8, "0")}${previousBlockHash}${merkleRoot}${timestamp
-      .toString(16)
-      .padStart(8, "0")}${DIFFICULTY_TARGET}${nonce
-      .toString(16)
-      .padStart(8, "0")}`;
+    blockHeaderTemplate.writeUInt32LE(nonce, 44);
     const nextHash = crypto
       .createHash("sha256")
-      .update(nextBlockData)
+      .update(crypto.createHash("sha256").update(blockHeaderTemplate).digest())
       .digest("hex");
 
     if (nextHash > DIFFICULTY_TARGET) {
