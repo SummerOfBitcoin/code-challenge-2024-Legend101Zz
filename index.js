@@ -464,31 +464,35 @@ const constructBlock = (validTransactions) => {
 
 // Step 4: Mine the Block
 const mineBlock = (blockTransactions) => {
-  let nonce = 0;
-  let blockHeader = "";
-  let interval = 1000; // Adjust this interval based on performance
-  const merkleRoot = calculateMerkleRoot(blockTransactions);
-  const previousBlockHash = "12bd1f661f00ffff00003ea4";
   const version = 4;
+  const previousBlockHash =
+    "0000000000000000000000000000000000000000000000000000000000000000";
+  const merkleRoot = calculateMerkleRoot(blockTransactions);
+  const difficultyTarget =
+    "0000ffff00000000000000000000000000000000000000000000000000000000";
+
+  let nonce = 0;
+  let timestamp = Math.floor(Date.now() / 1000);
+  let blockHeader = "";
+
+  const bits = "1f00ffff"; // Compact representation of the difficulty target
 
   // Construct the block header template
-  const blockHeaderTemplate = Buffer.concat([
-    Buffer.from(version.toString(16).padStart(8, "0"), "hex"),
-    Buffer.from(previousBlockHash, "hex"),
-    Buffer.from(merkleRoot, "hex"),
-    Buffer.alloc(8), // Placeholder for timestamp
-    Buffer.from(DIFFICULTY_TARGET, "hex"),
-    Buffer.alloc(8), // Placeholder for nonce
-  ]);
+  const blockHeaderTemplate = Buffer.alloc(80);
+  blockHeaderTemplate.writeUInt32BE(version, 0);
+  Buffer.from(previousBlockHash, "hex").copy(blockHeaderTemplate, 4);
+  Buffer.from(merkleRoot, "hex").reverse().copy(blockHeaderTemplate, 36);
+  blockHeaderTemplate.writeUInt32LE(timestamp, 68);
+  Buffer.from(bits, "hex").reverse().copy(blockHeaderTemplate, 72);
+  blockHeaderTemplate.writeUInt32LE(nonce, 76);
 
   while (true) {
-    const timestamp = Math.floor(Date.now() / 1000);
+    // Update the timestamp
+    timestamp = Math.floor(Date.now() / 1000);
+    blockHeaderTemplate.writeUInt32LE(timestamp, 68);
 
-    // Update the timestamp in the block header template
-    blockHeaderTemplate.writeUInt32LE(timestamp, 36);
-
-    // Update the nonce in the block header template
-    blockHeaderTemplate.writeUInt32LE(nonce, 44);
+    // Update the nonce
+    blockHeaderTemplate.writeUInt32LE(nonce, 76);
 
     // Calculate the double SHA-256 hash of the block header
     const hash = crypto
@@ -496,41 +500,14 @@ const mineBlock = (blockTransactions) => {
       .update(crypto.createHash("sha256").update(blockHeaderTemplate).digest())
       .digest("hex");
 
-    console.log("mining baby", blockHeaderTemplate.toString("hex"));
-    console.log(
-      "mining header",
-      `${version
-        .toString(16)
-        .padStart(8, "0")}//${previousBlockHash}//${merkleRoot}//${timestamp
-        .toString(16)
-        .padStart(8, "0")}//${DIFFICULTY_TARGET}//${nonce
-        .toString(16)
-        .padStart(8, "0")}`
-    );
-
-    if (hash < DIFFICULTY_TARGET) {
-      // If the hash meets the difficulty target, break the loop
+    // Check if the hash meets the difficulty target
+    if (hash < difficultyTarget) {
       blockHeader = blockHeaderTemplate.toString("hex");
       break;
     }
 
-    // Increment nonce and continue mining
-    nonce += interval;
-
-    // Check if we've overshot the target
-    blockHeaderTemplate.writeUInt32LE(nonce, 44);
-    const nextHash = crypto
-      .createHash("sha256")
-      .update(crypto.createHash("sha256").update(blockHeaderTemplate).digest())
-      .digest("hex");
-
-    if (nextHash > DIFFICULTY_TARGET) {
-      // If we overshot, reduce the interval
-      interval = Math.floor(interval / 2);
-      if (interval === 0) {
-        interval = 1;
-      }
-    }
+    // Increment the nonce
+    nonce++;
   }
 
   return { blockHeader, blockTransactions };
@@ -549,19 +526,29 @@ const calculateMerkleRoot = (transactions) => {
     const newHashes = [];
     for (let i = 0; i < hashes.length; i += 2) {
       const hash1 = hashes[i];
-      const hash2 = i + 1 < hashes.length ? hashes[i + 1] : hash1;
+      let hash2;
+      if (i + 1 < hashes.length) {
+        hash2 = hashes[i + 1];
+      } else {
+        // If there's an odd number of hashes, duplicate the last hash
+        hash2 = hash1;
+      }
       const combinedHash = crypto
         .createHash("sha256")
-        .update(Buffer.concat([hash1, Buffer.alloc(32), hash2]))
+        .update(
+          crypto
+            .createHash("sha256")
+            .update(Buffer.concat([hash1, hash2]))
+            .digest()
+        )
         .digest();
       newHashes.push(combinedHash);
     }
     hashes = newHashes;
   }
 
-  return Buffer.from(hashes[0]).toString("hex");
+  return Buffer.from(hashes[0]).reverse().toString("hex");
 };
-
 // Main function
 const main = () => {
   const transactions = readTransactionsFromMempool();
