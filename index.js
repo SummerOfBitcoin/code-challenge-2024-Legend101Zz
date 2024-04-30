@@ -532,12 +532,20 @@ const mineBlock = (blockTransactions) => {
   }
 };
 
+const hash256 = (input) => {
+  const h1 = crypto
+    .createHash("sha256")
+    .update(Buffer.from(input, "hex"))
+    .digest();
+  return crypto.createHash("sha256").update(h1).digest("hex");
+};
+
 const calculateMerkleRoot = (transactions) => {
   if (transactions.length === 0) {
     return "0000000000000000000000000000000000000000000000000000000000000000";
   }
 
-  let hashes = transactions.reduce((txids, tx) => {
+  let level = transactions.reduce((txids, tx) => {
     tx.vin.forEach((input) => {
       if (
         input.txid ===
@@ -550,38 +558,28 @@ const calculateMerkleRoot = (transactions) => {
     return txids;
   }, []);
 
-  while (hashes.length > 1) {
-    const newHashes = [];
-    for (let i = 0; i < hashes.length; i += 2) {
-      const hash1 = hashes[i];
-      let hash2;
-      if (i + 1 < hashes.length) {
-        hash2 = hashes[i + 1];
+  while (level.length > 1) {
+    const nextLevel = [];
+
+    for (let i = 0; i < level.length; i += 2) {
+      let pairHash;
+      if (i + 1 === level.length) {
+        // In case of an odd number of elements, duplicate the last one
+        pairHash = hash256(level[i] + level[i]);
       } else {
-        // If there's an odd number of hashes, duplicate the last hash
-        hash2 = hash1;
+        pairHash = hash256(level[i] + level[i + 1]);
       }
-      const combinedHash = crypto
-        .createHash("sha256")
-        .update(
-          crypto
-            .createHash("sha256")
-            .update(Buffer.concat([hash1, hash2]))
-            .digest()
-        )
-        .digest();
-      newHashes.push(combinedHash);
+      nextLevel.push(pairHash);
     }
-    hashes = newHashes;
+
+    level = nextLevel;
   }
-  console.log(
-    "merkle hashing done",
-    hashes[0],
-    "hasesh",
-    hashes,
-    Buffer.from(hashes[0]).reverse().toString("hex")
-  );
-  return Buffer.from(hashes[0]).reverse().toString("hex");
+
+  console.log("merkle hashing done", level[0]);
+
+  return level[0];
+
+  // return Buffer.from(level[0]).reverse().toString("hex");
 };
 // Main function
 const main = () => {
