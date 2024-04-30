@@ -283,4 +283,19 @@ const expectedOddMerkleRoot =
   "8b30c5ba100f6f2e5ad1e2a742e5020491240f8eb514fe97c713c31718ad7ecd";
 testMerkleRoot(oddTransactions, expectedOddMerkleRoot);
 
-
+const headerBuffer = Buffer.from(
+  "0400000000000000000000000000000000000000000000000000000000000000000000001ad8b2e36cb607b79f58878561b1b66107049b3190bdcb1252b78722743787eeb7303166ffff001f39080100",
+  "hex"
+);
+if (headerBuffer.length !== 80) throw new Error("Invalid header length");
+const difficulty = Buffer.from(
+  "0000ffff00000000000000000000000000000000000000000000000000000000",
+  "hex"
+);
+// double SHA256 and reverse
+const h1 = crypto.createHash("sha256").update(headerBuffer).digest();
+const h2 = crypto.createHash("sha256").update(h1).digest();
+const hash = h2.reverse();
+console.log("hash", hash);
+if (difficulty.compare(hash) < 0)
+  throw new Error("Block does not meet target difficulty");

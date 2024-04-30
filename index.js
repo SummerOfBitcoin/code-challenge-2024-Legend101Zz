@@ -509,10 +509,17 @@ const mineBlock = (blockTransactions) => {
         .update(
           crypto.createHash("sha256").update(blockHeaderTemplate).digest()
         )
-        .digest("hex");
+        .digest();
 
-      // Convert the hash to a BigInt for comparison
-      const hashValue = BigInt("0x" + hash);
+      // Reverse the hash before converting to BigInt
+      const reversedHash = hash
+        .toString("hex")
+        .match(/.{2}/g)
+        .reverse()
+        .join("");
+
+      // Convert the reversed hash to a BigInt for comparison
+      const hashValue = BigInt("0x" + reversedHash);
 
       // Check if the hash value is less than the target value
       if (hashValue < targetValue) {
