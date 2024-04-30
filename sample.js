@@ -209,10 +209,78 @@
 // }
 
 // main().catch((err) => console.error(err));
-const headerBuffer = Buffer.from(
-  "4bb0823783df8765661df66a93566e112a1c8ef57823d26b76fb7d50d9377f8d3a47586f78e825c24d70ad7136cfd3642254cc331d840aca68f81cf4a84002ef617143422380000ffff00000000000000000000000000000000000000000000000000000000157661",
-  "hex"
-);
-console.log(headerBuffer.length);
-if (headerBuffer.length !== 80) throw new Error("Invalid header length");
-console.log(headerBuffer);
+// const headerBuffer = Buffer.from(
+//   "4bb0823783df8765661df66a93566e112a1c8ef57823d26b76fb7d50d9377f8d3a47586f78e825c24d70ad7136cfd3642254cc331d840aca68f81cf4a84002ef617143422380000ffff00000000000000000000000000000000000000000000000000000000157661",
+//   "hex"
+// );
+// console.log(headerBuffer.length);
+// if (headerBuffer.length !== 80) throw new Error("Invalid header length");
+// console.log(headerBuffer);
+const crypto = require("crypto");
+
+const calculateMerkleRoot = (transactions) => {
+  if (transactions.length === 0) {
+    return "0000000000000000000000000000000000000000000000000000000000000000";
+  }
+
+  let hashes = transactions.map((tx) => Buffer.from(tx.txid, "hex").reverse());
+
+  while (hashes.length > 1) {
+    const newHashes = [];
+    for (let i = 0; i < hashes.length; i += 2) {
+      const hash1 = hashes[i];
+      let hash2;
+      if (i + 1 < hashes.length) {
+        hash2 = hashes[i + 1];
+      } else {
+        // If there's an odd number of hashes, duplicate the last hash
+        hash2 = hash1;
+      }
+      const combinedHash = crypto
+        .createHash("sha256")
+        .update(
+          crypto
+            .createHash("sha256")
+            .update(Buffer.concat([hash1, hash2]))
+            .digest()
+        )
+        .digest();
+      newHashes.push(combinedHash);
+    }
+    hashes = newHashes;
+  }
+
+  return Buffer.from(hashes[0]).reverse().toString("hex");
+};
+
+// Test cases
+const testMerkleRoot = (transactions, expectedMerkleRoot) => {
+  const merkleRoot = calculateMerkleRoot(transactions);
+  console.log(`Transactions: ${transactions.length}`);
+  console.log(`Expected Merkle Root: ${expectedMerkleRoot}`);
+  console.log(`Calculated Merkle Root: ${merkleRoot}`);
+  console.log(`Merkle Root Matched: ${merkleRoot === expectedMerkleRoot}\n`);
+};
+
+// Test Case 1: Even number of transactions
+const evenTransactions = [
+  { txid: "8c14f0db3df150123e6f3dbbf30f8b955a8249b62ac1d1ff16284aefa3d06d87" },
+  { txid: "fff2525b8931402dd09222c50775608f75787bd2b87e56995a7bdd30f79702c4" },
+  { txid: "6359f0868171b1d194cbee1af2f16ea598ae8fad666d9b012c8ed2b79a236ec4" },
+  { txid: "e9a66845e05d5abc0ad04ec80f774a7e585c6e8db975962d069a522137b80c1d" },
+];
+const expectedEvenMerkleRoot =
+  "f3e94742aca4b5ef85488dc37c06c3282295ffec960994b2c0d5ac2a25a95766";
+testMerkleRoot(evenTransactions, expectedEvenMerkleRoot);
+
+// Test Case 2: Odd number of transactions
+const oddTransactions = [
+  { txid: "8c14f0db3df150123e6f3dbbf30f8b955a8249b62ac1d1ff16284aefa3d06d87" },
+  { txid: "fff2525b8931402dd09222c50775608f75787bd2b87e56995a7bdd30f79702c4" },
+  { txid: "6359f0868171b1d194cbee1af2f16ea598ae8fad666d9b012c8ed2b79a236ec4" },
+];
+const expectedOddMerkleRoot =
+  "8b30c5ba100f6f2e5ad1e2a742e5020491240f8eb514fe97c713c31718ad7ecd";
+testMerkleRoot(oddTransactions, expectedOddMerkleRoot);
+
+

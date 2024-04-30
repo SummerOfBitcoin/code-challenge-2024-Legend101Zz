@@ -280,7 +280,6 @@ function validateTransaction(transaction) {
       OP_16: 0x60,
       OP_CHECKSIG: 0xac,
       OP_CHECKMULTISIG: 0xae,
-      // Add more opcodes as needed
     };
 
     const popStackItem = () => {
@@ -455,6 +454,7 @@ const constructBlock = (validTransactions) => {
     if (blockSize + txSize > MAX_BLOCK_SIZE) {
       break;
     }
+    // console.log("the  transaction that is being added to be mined", tx);
     blockTransactions.push(tx);
     blockSize += txSize;
   }
@@ -470,47 +470,66 @@ const mineBlock = (blockTransactions) => {
   const merkleRoot = calculateMerkleRoot(blockTransactions);
   const difficultyTarget =
     "0000ffff00000000000000000000000000000000000000000000000000000000";
-
   let nonce = 0;
   let timestamp = Math.floor(Date.now() / 1000);
   let blockHeader = "";
-
   const bits = "1f00ffff"; // Compact representation of the difficulty target
 
   // Construct the block header template
   const blockHeaderTemplate = Buffer.alloc(80);
-  blockHeaderTemplate.writeUInt32BE(version, 0);
-  Buffer.from(previousBlockHash, "hex").copy(blockHeaderTemplate, 4);
+  blockHeaderTemplate.writeUInt32LE(version, 0);
+  Buffer.from(previousBlockHash, "hex").reverse().copy(blockHeaderTemplate, 4);
   Buffer.from(merkleRoot, "hex").reverse().copy(blockHeaderTemplate, 36);
   blockHeaderTemplate.writeUInt32LE(timestamp, 68);
-  Buffer.from(bits, "hex").reverse().copy(blockHeaderTemplate, 72);
-  blockHeaderTemplate.writeUInt32LE(nonce, 76);
+
+  // Reverse the byte order of the difficulty target
+  const reversedBits = Buffer.from(bits, "hex").reverse().toString("hex");
+  blockHeaderTemplate.write(reversedBits, 72, 4, "hex");
+
+  // Calculate the target value from the difficulty target
+  const targetValue = BigInt("0x" + difficultyTarget);
+
+  // Define the mining interval and maximum nonce value
+  const miningInterval = 100000;
+  const maxNonce = 0xffffffff;
 
   while (true) {
     // Update the timestamp
     timestamp = Math.floor(Date.now() / 1000);
     blockHeaderTemplate.writeUInt32LE(timestamp, 68);
 
-    // Update the nonce
-    blockHeaderTemplate.writeUInt32LE(nonce, 76);
+    // Iterate over a range of nonce values
+    for (let i = 0; i < miningInterval; i++) {
+      // Update the nonce in the block header template
+      blockHeaderTemplate.writeUInt32LE(nonce, 76);
 
-    // Calculate the double SHA-256 hash of the block header
-    const hash = crypto
-      .createHash("sha256")
-      .update(crypto.createHash("sha256").update(blockHeaderTemplate).digest())
-      .digest("hex");
+      // Calculate the double SHA-256 hash of the block header
+      const hash = crypto
+        .createHash("sha256")
+        .update(
+          crypto.createHash("sha256").update(blockHeaderTemplate).digest()
+        )
+        .digest("hex");
 
-    // Check if the hash meets the difficulty target
-    if (hash < difficultyTarget) {
-      blockHeader = blockHeaderTemplate.toString("hex");
-      break;
+      // Convert the hash to a BigInt for comparison
+      const hashValue = BigInt("0x" + hash);
+
+      // Check if the hash value is less than the target value
+      if (hashValue < targetValue) {
+        blockHeader = blockHeaderTemplate.toString("hex");
+        return { blockHeader, blockTransactions };
+      }
+
+      // Increment the nonce
+      nonce++;
+
+      // Check if the maximum nonce value is reached
+      if (nonce > maxNonce) {
+        nonce = 0;
+        break;
+      }
     }
-
-    // Increment the nonce
-    nonce++;
   }
-
-  return { blockHeader, blockTransactions };
 };
 
 const calculateMerkleRoot = (transactions) => {
@@ -518,9 +537,18 @@ const calculateMerkleRoot = (transactions) => {
     return "0000000000000000000000000000000000000000000000000000000000000000";
   }
 
-  let hashes = transactions.map((tx) =>
-    crypto.createHash("sha256").update(serializeTransaction(tx)).digest()
-  );
+  let hashes = transactions.reduce((txids, tx) => {
+    tx.vin.forEach((input) => {
+      if (
+        input.txid ===
+        "0000000000000000000000000000000000000000000000000000000000000000"
+      )
+        console.log("got txid", input.txid);
+      txids.push(Buffer.from(input.txid, "hex").reverse());
+    });
+
+    return txids;
+  }, []);
 
   while (hashes.length > 1) {
     const newHashes = [];
@@ -546,7 +574,13 @@ const calculateMerkleRoot = (transactions) => {
     }
     hashes = newHashes;
   }
-
+  console.log(
+    "merkle hashing done",
+    hashes[0],
+    "hasesh",
+    hashes,
+    Buffer.from(hashes[0]).reverse().toString("hex")
+  );
   return Buffer.from(hashes[0]).reverse().toString("hex");
 };
 // Main function
