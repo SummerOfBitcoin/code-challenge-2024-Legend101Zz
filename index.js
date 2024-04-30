@@ -520,7 +520,7 @@ const mineBlock = (blockTransactions) => {
 
       // Convert the reversed hash to a BigInt for comparison
       const hashValue = BigInt("0x" + reversedHash);
-
+      // console.log("mining", hashValue, targetValue);
       // Check if the hash value is less than the target value
       if (hashValue < targetValue) {
         blockHeader = blockHeaderTemplate.toString("hex");
@@ -547,46 +547,81 @@ const hash256 = (input) => {
   return crypto.createHash("sha256").update(h1).digest("hex");
 };
 
+// const calculateMerkleRoot = (transactions) => {
+//   if (transactions.length === 0) {
+//     return "0000000000000000000000000000000000000000000000000000000000000000";
+//   }
+
+//   let level = transactions.reduce((txids, tx) => {
+//     tx.vin.forEach((input) => {
+//       txids.push(input.txid);
+//     });
+
+//     return txids;
+//   }, []);
+
+//   while (level.length > 1) {
+//     const nextLevel = [];
+
+//     for (let i = 0; i < level.length; i += 2) {
+//       let pairHash;
+//       if (i + 1 === level.length) {
+//         // In case of an odd number of elements, duplicate the last one
+//         pairHash = hash256(level[i] + level[i]);
+//       } else {
+//         pairHash = hash256(level[i] + level[i + 1]);
+//       }
+//       nextLevel.push(pairHash);
+//     }
+
+//     level = nextLevel;
+//   }
+
+//   console.log("merkle hashing done", level[0]);
+
+//   return level[0];
+
+//   // return Buffer.from(level[0]).reverse().toString("hex");
+// };
+
 const calculateMerkleRoot = (transactions) => {
   if (transactions.length === 0) {
     return "0000000000000000000000000000000000000000000000000000000000000000";
   }
 
-  let level = transactions.reduce((txids, tx) => {
+  let hashes = transactions.reduce((txids, tx) => {
     tx.vin.forEach((input) => {
-      if (
-        input.txid ===
-        "0000000000000000000000000000000000000000000000000000000000000000"
-      )
-        console.log("got txid", input.txid);
       txids.push(Buffer.from(input.txid, "hex").reverse());
     });
-
     return txids;
   }, []);
 
-  while (level.length > 1) {
-    const nextLevel = [];
-
-    for (let i = 0; i < level.length; i += 2) {
-      let pairHash;
-      if (i + 1 === level.length) {
-        // In case of an odd number of elements, duplicate the last one
-        pairHash = hash256(level[i] + level[i]);
+  while (hashes.length > 1) {
+    const newHashes = [];
+    for (let i = 0; i < hashes.length; i += 2) {
+      const hash1 = hashes[i];
+      let hash2;
+      if (i + 1 < hashes.length) {
+        hash2 = hashes[i + 1];
       } else {
-        pairHash = hash256(level[i] + level[i + 1]);
+        // If there's an odd number of hashes, duplicate the last hash
+        hash2 = hash1;
       }
-      nextLevel.push(pairHash);
+      const combinedHash = crypto
+        .createHash("sha256")
+        .update(
+          crypto
+            .createHash("sha256")
+            .update(Buffer.concat([hash1, hash2]))
+            .digest()
+        )
+        .digest();
+      newHashes.push(combinedHash);
     }
-
-    level = nextLevel;
+    hashes = newHashes;
   }
 
-  console.log("merkle hashing done", level[0]);
-
-  return level[0];
-
-  // return Buffer.from(level[0]).reverse().toString("hex");
+  return Buffer.from(hashes[0]).reverse().toString("hex");
 };
 // Main function
 const main = () => {
@@ -604,7 +639,15 @@ const main = () => {
     crypto.createHash("sha256").update(serializeTransaction(tx)).digest("hex")
   );
 
-  const output = `${blockHeader}\n${serializedCoinbaseTransaction}\n${txids.join(
+  const txids2 = minedTransactions.reduce((txids, tx) => {
+    tx.vin.forEach((input) => {
+      txids.push(input.txid);
+    });
+
+    return txids;
+  }, []);
+
+  const output = `${blockHeader}\n${serializedCoinbaseTransaction}\n${txids2.join(
     "\n"
   )}`;
   fs.writeFileSync(OUTPUT_FILE, output);
