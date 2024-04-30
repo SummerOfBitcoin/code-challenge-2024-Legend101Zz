@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { validateScript, verifySignature } = require("./utils/validationUtils");
+const { validateScript, verifySignature } = require("./validationUtils");
 
 /**
  * Validate a transaction.

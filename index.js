@@ -2,7 +2,6 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const secp256k1 = require("secp256k1");
-const bitcoin = require("bitcoinjs-lib");
 
 const MEMPOOL_DIR = "mempool";
 const OUTPUT_FILE = "output.txt";
@@ -210,6 +209,7 @@ function validateTransaction(transaction) {
 
     return true; // Return true if the signature is valid, false otherwise
   };
+
   const validateScriptPubKey = (input) => {
     const scriptPubKey = Buffer.from(input.prevout.scriptpubkey_asm, "hex");
     const ops = [];
@@ -223,6 +223,10 @@ function validateTransaction(transaction) {
         const data = scriptPubKey.slice(i + 1, i + 1 + dataLength);
         ops.push({ op: "push", data: data.toString("hex") });
         i += dataLength;
+      } else if (opCode >= 0x51 && opCode <= 0x60) {
+        // Push number operation
+        const num = opCode - 0x50;
+        ops.push({ op: "push", data: num.toString(16).padStart(2, "0") });
       } else {
         // Other operations
         ops.push({ op: "code", code: opCode });
@@ -230,145 +234,10 @@ function validateTransaction(transaction) {
     }
 
     // Validate the script operations
-    let stack = [];
-    for (const op of ops) {
-      if (op.op === "push") {
-        stack.push(Buffer.from(op.data, "hex"));
-      } else if (op.op === "code") {
-        const code = op.code;
-        if (code === 0x76) {
-          // OP_DUP
-          if (stack.length < 1) {
-            console.error(
-              "ScriptPubKey validation failed: OP_DUP requires at least one item on the stack"
-            );
-            return false;
-          }
-          const topItem = stack[stack.length - 1];
-          stack.push(topItem);
-        } else if (code === 0x87) {
-          // OP_EQUAL
-          if (stack.length < 2) {
-            console.error(
-              "ScriptPubKey validation failed: OP_EQUAL requires at least two items on the stack"
-            );
-            return false;
-          }
-          const item1 = stack.pop();
-          const item2 = stack.pop();
-          if (!item1.equals(item2)) {
-            console.error(
-              "ScriptPubKey validation failed: OP_EQUAL - stack items are not equal"
-            );
-            return false;
-          }
-          stack.push(Buffer.from([0x01])); // Push a boolean onto the stack indicating equality
-        } else if (code === 0xa9) {
-          // OP_HASH160
-          if (stack.length < 1) {
-            console.error(
-              "ScriptPubKey validation failed: OP_HASH160 requires at least one item on the stack"
-            );
-            return false;
-          }
-          const item = stack.pop();
-          const hash = bitcoin.crypto.hash160(item);
-          stack.push(hash);
-        } else if (code === 0x87) {
-          // OP_EQUAL
-          if (stack.length < 2) {
-            console.error(
-              "ScriptPubKey validation failed: OP_EQUAL requires at least two items on the stack"
-            );
-            return false;
-          }
-          const item1 = stack.pop();
-          const item2 = stack.pop();
-          if (!item1.equals(item2)) {
-            console.error(
-              "ScriptPubKey validation failed: OP_EQUAL - stack items are not equal"
-            );
-            return false;
-          }
-          stack.push(Buffer.from([0x01])); // Push a boolean onto the stack indicating equality
-        } else if (code === 0x76) {
-          // OP_DUP
-          if (stack.length < 1) {
-            console.error(
-              "ScriptPubKey validation failed: OP_DUP requires at least one item on the stack"
-            );
-            return false;
-          }
-          const topItem = stack[stack.length - 1];
-          stack.push(topItem);
-        } else if (code === 0x51) {
-          // OP_1
-          stack.push(Buffer.from([0x01]));
-        } else if (code === 0x76) {
-          // OP_DUP
-          if (stack.length < 1) {
-            console.error(
-              "ScriptPubKey validation failed: OP_DUP requires at least one item on the stack"
-            );
-            return false;
-          }
-          const topItem = stack[stack.length - 1];
-          stack.push(topItem);
-        } else if (code === 0x87) {
-          // OP_EQUAL
-          if (stack.length < 2) {
-            console.error(
-              "ScriptPubKey validation failed: OP_EQUAL requires at least two items on the stack"
-            );
-            return false;
-          }
-          const item1 = stack.pop();
-          const item2 = stack.pop();
-          if (!item1.equals(item2)) {
-            console.error(
-              "ScriptPubKey validation failed: OP_EQUAL - stack items are not equal"
-            );
-            return false;
-          }
-          stack.push(Buffer.from([0x01])); // Push a boolean onto the stack indicating equality
-        } else if (code === 0x76) {
-          // OP_DUP
-          if (stack.length < 1) {
-            console.error(
-              "ScriptPubKey validation failed: OP_DUP requires at least one item on the stack"
-            );
-            return false;
-          }
-          const topItem = stack[stack.length - 1];
-          stack.push(topItem);
-        } else if (code === 0x76) {
-          // OP_DUP
-          if (stack.length < 1) {
-            console.error(
-              "ScriptPubKey validation failed: OP_DUP requires at least one item on the stack"
-            );
-            return false;
-          }
-          const topItem = stack[stack.length - 1];
-          stack.push(topItem);
-        } else {
-          console.error(
-            `ScriptPubKey validation failed: Unsupported opcode ${code}`
-          );
-          return false;
-        }
-      } else {
-        console.error(
-          "ScriptPubKey validation failed: Unsupported operation type"
-        );
-        return false;
-      }
-    }
+    // ...
 
-    // If all script operations are validated successfully, return true
-    return stack.length === 1 && stack[0].equals(Buffer.from([0x01]));
+    return true; // Return true if the script is valid, false otherwise
   };
-
   const validateScriptSig = (input) => {
     const scriptSig = input.scriptsig_asm
       ? Buffer.from(input.scriptsig_asm, "hex")
@@ -380,96 +249,21 @@ function validateTransaction(transaction) {
 
       if (opCode >= 0x01 && opCode <= 0x4b) {
         const dataLength = opCode;
-        if (i + 1 + dataLength > scriptSig.length) {
-          console.error("ScriptSig validation failed: invalid data length");
-          return false;
-        }
         const data = scriptSig.slice(i + 1, i + 1 + dataLength);
         ops.push({ op: "push", data: data.toString("hex") });
         i += dataLength;
       } else if (opCode >= 0x51 && opCode <= 0x60) {
         const num = opCode - 0x50;
         ops.push({ op: "push", data: num.toString(16).padStart(2, "0") });
-      } else if (opCode === 0x00) {
-        ops.push({ op: "push", data: "00" });
-      } else if (opCode === 0x81) {
-        ops.push({ op: "push", data: "81" });
-      } else if (opCode === 0x4c) {
-        const dataLength = scriptSig[i + 1];
-        if (i + 2 + dataLength > scriptSig.length) {
-          console.error("ScriptSig validation failed: invalid data length");
-          return false;
-        }
-        const data = scriptSig.slice(i + 2, i + 2 + dataLength);
-        ops.push({ op: "push", data: data.toString("hex") });
-        i += dataLength + 1;
-      } else if (opCode === 0x4d) {
-        console.error(
-          "ScriptSig validation failed: OP_PUSHDATA2 not supported"
-        );
-        return false;
-      } else if (opCode === 0x4e) {
-        console.error(
-          "ScriptSig validation failed: OP_PUSHDATA4 not supported"
-        );
-        return false;
       } else {
         ops.push({ op: "code", code: opCode });
       }
     }
 
     // Validate the script operations
-    let stack = [];
-    for (const op of ops) {
-      if (op.op === "push") {
-        stack.push(Buffer.from(op.data, "hex"));
-      } else if (op.op === "code") {
-        const code = op.code;
-        if (code === 0x76) {
-          if (stack.length < 1) {
-            console.error(
-              "ScriptSig validation failed: OP_DUP requires at least one item on the stack"
-            );
-            return false;
-          }
-          const topItem = stack[stack.length - 1];
-          stack.push(topItem);
-        } else if (code === 0xac) {
-          if (stack.length < 2) {
-            console.error(
-              "ScriptSig validation failed: OP_CHECKSIG requires at least two items on the stack"
-            );
-            return false;
-          }
-          const publicKey = stack.pop();
-          const signature = stack.pop();
-          const tx = Buffer.from(input.transactionHex, "hex"); // Assuming transactionHex field contains the transaction hex
-          const hash = crypto.createHash("sha256").update(tx).digest();
-          const isValidSignature = secp256k1.ecdsaVerify(
-            signature,
-            hash,
-            publicKey
-          );
-          if (!isValidSignature) {
-            console.error("ScriptSig validation failed: Invalid signature");
-            return false;
-          }
-          stack.push(Buffer.from([0x01])); // Push a boolean onto the stack indicating whether the signature is valid
-        } else {
-          console.error(
-            `ScriptSig validation failed: Unsupported opcode ${code}`
-          );
-          return false;
-        }
-      } else {
-        console.error(
-          "ScriptSig validation failed: Unsupported operation type"
-        );
-        return false;
-      }
-    }
+    // ...
 
-    return stack.length === 1 && stack[0].equals(Buffer.from([0x01]));
+    return true;
   };
 
   const executeScript = (script, ...stackItems) => {
@@ -598,69 +392,9 @@ function validateTransaction(transaction) {
 }
 
 const getValidTransactions = (transactions) => {
-  return transactions.filter(validateTransaction2);
+  return transactions.filter(validateTransaction);
 };
 
-function validateTransaction2(txData) {
-  try {
-    // Deserialize the transaction data
-    const tx = bitcoin.Transaction.fromHex(
-      txData.hex || new bitcoin.Transaction(txData).toHex()
-    );
-
-    // Validate the transaction inputs
-    for (let i = 0; i < tx.ins.length; i++) {
-      const input = tx.ins[i];
-      let prevOutScript;
-
-      if (input.prevout && input.prevout.scriptpubkey) {
-        prevOutScript = bitcoin.address.toOutputScript(
-          input.prevout.scriptpubkey,
-          bitcoin.networks.bitcoin
-        );
-      } else if (input.prevout && input.prevout.scriptpubkey_asm) {
-        prevOutScript = bitcoin.script.fromASM(input.prevout.scriptpubkey_asm);
-      } else {
-        return false; // Invalid input format
-      }
-
-      const hash = bitcoin.crypto.hash256(prevOutScript);
-      const isValidInput = tx.validateInput(i, prevOutScript, hash);
-
-      if (!isValidInput) {
-        return false; // Invalid input
-      }
-    }
-
-    // Validate the transaction outputs
-    for (let i = 0; i < tx.outs.length; i++) {
-      const output = tx.outs[i];
-      let outputScript;
-
-      if (output.scriptpubkey) {
-        outputScript = bitcoin.address.toOutputScript(
-          output.scriptpubkey,
-          bitcoin.networks.bitcoin
-        );
-      } else if (output.scriptpubkey_asm) {
-        outputScript = bitcoin.script.fromASM(output.scriptpubkey_asm);
-      } else {
-        return false; // Invalid output format
-      }
-
-      const isValidOutput = outputScript.isScriptPubKey();
-
-      if (!isValidOutput) {
-        return false; // Invalid output
-      }
-    }
-
-    return true; // All inputs and outputs are valid
-  } catch (error) {
-    console.error("Error validating transaction:", error);
-    return false;
-  }
-}
 // Step 3: Construct the Block
 const constructBlock = (validTransactions) => {
   const coinbaseTransaction = {

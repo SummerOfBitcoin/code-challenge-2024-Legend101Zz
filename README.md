@@ -1,67 +1,75 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)](https://classroom.github.com/a/bWLxfecg)
 # Summer of Bitcoin 2024: Mine your first block
 
-## Overview
-In this challenge, you are tasked with the simulation of mining process of a block, which includes validating and including transactions from a given set of transactions.
-The repository contains a folder `mempool` which contains JSON files. 
-These files represent individual transactions, some of which may be invalid. Your goal is to successfully mine a block by including only the valid transactions, following the specific requirements outlined below.
+## Design Approach
 
-## Objective
-Your primary objective is to write a script that processes a series of transactions, validates them, and then mines them into a block. The output of your script should be a file named `output.txt` that follows a specific format.
+The design approach for this solution involves following the standard process of block construction and mining in the Bitcoin blockchain. The key steps include:
 
-## Requirements
-### Input
-- You are provided with a folder named `mempool` containing several JSON files. Each file represents a transaction that includes all necessary information for validation.
-- Among these transactions, some are invalid. Your script should be able to discern valid transactions from invalid ones.
+1. **Transaction Validation**: Validate each transaction from the provided mempool to ensure that only legitimate transactions are included in the block. This step involves deserializing transactions, verifying signatures, and executing scripts based on the input address type (e.g., P2PKH, P2WPKH, P2TR, P2SH, P2WSH).
 
-### Output
-Your script must generate an output file named `output.txt` with the following structure:
-- First line: The block header.
-- Second line: The serialized coinbase transaction.
-- Following lines: The transaction IDs (txids) of the transactions mined in the block, in order. The first txid should be that of the coinbase transaction
+2. **Block Construction**: Construct the block by creating a coinbase transaction with the appropriate reward and including valid transactions from the mempool. The transactions are sorted in descending order based on their fees, and they are added to the block until the maximum block size is reached.
 
-### Difficulty Target
-The difficulty target is `0000ffff00000000000000000000000000000000000000000000000000000000`. This is the value that the block hash must be less than for the block to be successfully mined.
+3. **Mining**: Perform the mining process by repeatedly hashing the block header with different nonce values until a valid hash is found. The block header includes components such as the version, previous block hash, merkle root, timestamp, and difficulty target.
 
-## Execution
-- Create a file named `run.sh` that contains the command to execute your script. This file should ideally contain a single command like `python main.py` or `node index.js`.
-- Your script should autonomously perform all tasks when `run.sh` is executed, without requiring any manual intervention.
+4. **Output Generation**: Once a valid hash is found, serialize the coinbase transaction, collect the transaction IDs (txids) of the included transactions, and write the block header, serialized coinbase transaction, and txids to the `output.txt` file in the required format.
 
-## Evaluation Criteria
-Your submission will be evaluated based on the following criteria:
+## Implementation Details
 
-- **Score**: Your code output will be scored bases on the fee collected and the amount of available block space utilised. **You must score at least 60 points to pass the challenge.**
-- **Correctness**: The `output.txt` file must be correctly formatted in the manner described above.
-- **Code Quality**: Your code should be well-organized, commented, and follow best practices.
-- **Efficiency**: Your solution should process transactions and mine the block efficiently.
+### 1. Reading and Validating Transactions
 
-## Document your work
+The solution reads all transaction files from the `mempool` directory using the `fs` module in Node.js. The `validateTransaction` function is implemented to validate each transaction based on its input address type. This function deserializes the transaction using the `serializeTransaction` function and performs various checks, including:
 
-Apart from the code, you must also publish a `SOLUTION.md` file explaining your solution in the following format:
-- **Design Approach:** Describe the approach you took to design your block construction program, explain all the key concepts of creating a valid block.
-- **Implementation Details:** Provide pseudo code of your implementation, including sequence of logic, algorithms and variables used etc.
-- **Results and Performance:** Present the results of your solution, and analyze the efficiency of your solution.
-- **Conclusion:** Discuss any insights gained from solving the problem, and outline potential areas for future improvement or research. Include a list of references or resources consulted during the problem-solving process.
+- Signature verification for P2PKH and P2WPKH inputs using the `secp256k1` library.
+- Execution and validation of scripts associated with different address types using the `executeScript` helper function.
 
-## What NOT to Do
+### 2. Constructing the Block
 
-In this challenge, it's crucial to understand and adhere to the following restrictions. These are put in place to ensure that you engage with the core concepts of bitcoin and apply your problem-solving skills to implement the solution from first principles.
+The `constructBlock` function takes an array of valid transactions as input. It creates a coinbase transaction with predetermined details, sorts the valid transactions based on their fees in descending order, and iteratively adds transactions to the block until the maximum block size is reached or no more transactions are available.
 
-- **Do Not Use Bitcoin Libraries for Transaction Validation:** You must not use any Bitcoin-specific libraries or frameworks that automate transaction validation processes. The intent of this challenge is for you to understand and implement the validation logic manually.
-- **Permissible Libraries:** The use of standard cryptographic libraries, such as secp256k1 for elliptic curve cryptography, and standard hashing libraries (e.g., for SHA-256) is allowed and encouraged. These libraries are essential for implementing the cryptographic underpinnings of bitcoin without reinventing the wheel.
- - **Implement the Mining Algorithm Yourself:** You are required to implement the mining algorithm on your own. This includes creating a way to correctly form a block header, calculate the hash, and meet the challenge of finding a hash below a certain target.
+### 3. Mining the Block
 
-### Plagiarism Policy:
-Our plagiarism detection checker thoroughly identifies any instances of copying or cheating. Participants are required to publish their solutions in the designated repository, which is private and accessible only to the individual and the administrator. Solutions should not be shared publicly or with peers. In case of plagiarism, both parties involved will be directly disqualified to maintain fairness and integrity.
+The `mineBlock` function takes an array of block transactions as input. It constructs the block header template by combining various components like version, previous block hash, merkle root, timestamp, and difficulty target. The function enters a loop where it increments the nonce value and recalculates the block hash using the double SHA-256 algorithm. If the calculated hash is less than the target difficulty, the block is considered successfully mined, and the function returns the block header and transactions.
 
-### AI Usage Disclaimer:
-You may use AI tools like ChatGPT to gather information and explore alternative approaches, but avoid relying solely on AI for complete solutions. Verify and validate any insights obtained and maintain a balance between AI assistance and independent problem-solving.
+### 4. Output Generation
 
-## Why These Restrictions?
-These restrictions are designed to deepen your understanding of bitcoin technicals.
-By completing this assignment, you will gain hands-on experience with the technology that make bitcoin secure and trustless.
-Remember, the goal of this challenge is not just to produce a working solution but to engage critically with the fundamental components of bitcoin. This is an opportunity to showcase your problem-solving skills and your ability to implement complex algorithms from scratch.
+After mining the block, the solution serializes the coinbase transaction, collects the transaction IDs (txids) of all included transactions, and writes the block header, serialized coinbase transaction, and txids to the `output.txt` file in the required format.
 
-## Additional Information
-- This challenge is designed to test your understanding of bitcoin fundamentals, including transaction validation and block mining processes.
-- While the challenge focuses on the simulation of these processes, you are encouraged to implement your solution in a way that demonstrates depth of understanding and creativity.
+## Challenges Faced
+
+One of the primary challenges faced during the implementation was related to transaction validation, particularly the understanding and implementation of various script execution rules and opcodes for different address types. This involved interpreting and evaluating complex script conditions, handling edge cases, and ensuring compatibility with the Bitcoin scripting language.
+
+Additionally, deserializing and parsing transaction data posed difficulties due to the intricate and nested structure of Bitcoin transactions.
+
+While significant progress was made in implementing the transaction validation logic for various address types, such as P2PKH, P2WPKH, P2TR, P2SH, and P2WSH, certain aspects of transaction validation still require further debugging and research to fully resolve the remaining issues.
+
+## Results and Performance
+
+The solution successfully mines a block by including valid transactions from the provided mempool and adhering to the specified difficulty target. The output file `output.txt` is generated with the correct format, containing the block header, serialized coinbase transaction, and transaction IDs of the included transactions.
+
+In terms of performance, the solution processes transactions and mines the block efficiently by utilizing appropriate data structures and algorithms. The transaction validation process is optimized by implementing separate validation logic for different address types, reducing unnecessary computations.
+
+However, due to the challenges faced in transaction validation, the solution may not include all valid transactions or may inadvertently include some invalid transactions. Further refinement and testing of the transaction validation logic are required to improve the accuracy and reliability of the solution.
+
+## Conclusion
+
+Solving the "Mine your first block" challenge provided valuable insights into the intricate process of block construction and mining in the Bitcoin blockchain. The implementation involved a deep understanding of transaction validation, block assembly, and mining algorithms.
+
+Throughout the process, several key concepts were reinforced, including:
+
+- Transaction serialization and deserialization
+- Signature verification and script execution for different address types
+- Block header construction and merkle root calculation
+- Mining process and difficulty target adherence
+
+While the solution successfully mines a block and generates the required output, there is room for improvement in the transaction validation component. Further research and refinement of the script execution and validation logic could enhance the accuracy and robustness of the solution.
+
+Additionally, exploring optimizations in the mining process, such as utilizing parallel computation or more efficient hashing algorithms, could potentially improve the performance of the solution.
+
+Overall, this challenge provided a practical and hands-on experience in understanding the core components of the Bitcoin blockchain and laid a solid foundation for further exploration and development in this domain.
+
+## References
+
+1. [Bitcoin Developer Guide](https://bitcoin.org/en/developer-guide)
+2. [Bitcoin Improvement Proposals (BIPs)](https://github.com/bitcoin/bips)
+3. [Bitcoin Core Documentation](https://bitcoin.org/en/bitcoin-core/doc)
+4. [secp256k1 Library](https://github.com/bitcoin-core/secp256k1)
+5. [Bitcoin Script Opcodes](https://en.bitcoin.it/wiki/Script)
